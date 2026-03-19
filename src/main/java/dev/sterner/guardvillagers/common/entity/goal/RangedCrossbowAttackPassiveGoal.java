@@ -139,7 +139,7 @@ public class RangedCrossbowAttackPassiveGoal<T extends PathAwareEntity & RangedA
                 }
                 int i = this.mob.getItemUseTime();
                 ItemStack itemstack = this.mob.getActiveItem();
-                if (i >= CrossbowItem.getPullTime(itemstack) || CrossbowItem.isCharged(itemstack)) {
+                if (i >= CrossbowItem.getPullTime(itemstack, this.mob) || CrossbowItem.isCharged(itemstack)) {
                     this.mob.stopUsingItem();
                     this.crossbowState = CrossbowState.CHARGED;
                     this.attackDelay = 10 + this.mob.getRandom().nextInt(5);
@@ -151,9 +151,9 @@ public class RangedCrossbowAttackPassiveGoal<T extends PathAwareEntity & RangedA
                     this.crossbowState = CrossbowState.READY_TO_ATTACK;
                 }
             } else if (this.crossbowState == CrossbowState.READY_TO_ATTACK && canSee) {
-                this.mob.attack(livingentity, 1.0F);
+                this.mob.shootAt(livingentity, 1.0F);
                 ItemStack itemstack1 = this.mob.getStackInHand(GuardVillagers.getHandWith(this.mob, item -> item instanceof CrossbowItem));
-                CrossbowItem.setCharged(itemstack1, false);
+                itemstack1.set(net.minecraft.component.DataComponentTypes.CHARGED_PROJECTILES, net.minecraft.component.type.ChargedProjectilesComponent.DEFAULT);
                 this.crossbowState = CrossbowState.UNCHARGED;
             }
         }
@@ -161,13 +161,13 @@ public class RangedCrossbowAttackPassiveGoal<T extends PathAwareEntity & RangedA
     }
 
     private boolean friendlyInLineOfSight() {
-        List<Entity> list = this.mob.getWorld().getOtherEntities(this.mob, this.mob.getBoundingBox().expand(5.0D));
+        List<Entity> list = this.mob.getEntityWorld().getOtherEntities(this.mob, this.mob.getBoundingBox().expand(5.0D));
         for (Entity guard : list) {
             if (guard != this.mob.getTarget()) {
                 boolean isVillager = ((GuardEntity) this.mob).getOwner() == guard || guard.getType() == EntityType.VILLAGER || guard.getType() == GuardVillagers.GUARD_VILLAGER || guard.getType() == EntityType.IRON_GOLEM;
                 if (isVillager) {
                     Vec3d vector3d = this.mob.getRotationVector();
-                    Vec3d vector3d1 = guard.getPos().relativize(this.mob.getPos()).normalize();
+                    Vec3d vector3d1 = guard.getEntityPos().relativize(this.mob.getEntityPos()).normalize();
                     vector3d1 = new Vec3d(vector3d1.x, vector3d1.y, vector3d1.z);
                     if (vector3d1.dotProduct(vector3d) < 1.0D && this.mob.canSee(guard) && guard.distanceTo(this.mob) <= 4.0D)
                         return true;
@@ -192,7 +192,7 @@ public class RangedCrossbowAttackPassiveGoal<T extends PathAwareEntity & RangedA
     @Nullable
     protected Vec3d getPosition() {
         if (this.isValidTarget())
-            return NoPenaltyTargeting.findFrom(this.mob, 16, 7, this.mob.getTarget().getPos());
+            return NoPenaltyTargeting.findFrom(this.mob, 16, 7, this.mob.getTarget().getEntityPos());
         else
             return NoPenaltyTargeting.find(this.mob, 16, 7);
     }

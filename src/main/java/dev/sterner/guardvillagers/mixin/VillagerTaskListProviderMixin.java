@@ -12,6 +12,7 @@ import net.minecraft.entity.EntityType;
 import net.minecraft.entity.ai.brain.MemoryModuleType;
 import net.minecraft.entity.ai.brain.task.*;
 import net.minecraft.entity.passive.VillagerEntity;
+import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.village.VillagerProfession;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -39,8 +40,8 @@ public class VillagerTaskListProviderMixin {
     }
 
     @Inject(method = "createWorkTasks", cancellable = true, at = @At("RETURN"))
-    private static void createWorkTasks(VillagerProfession profession, float speed, CallbackInfoReturnable<ImmutableList<Pair<Integer, ? extends Task<? super VillagerEntity>>>> cir) {
-        if (profession == VillagerProfession.TOOLSMITH || profession == VillagerProfession.WEAPONSMITH && GuardVillagersConfig.blackSmithHealing) {
+    private static void createWorkTasks(RegistryEntry<VillagerProfession> profession, float speed, CallbackInfoReturnable<ImmutableList<Pair<Integer, ? extends Task<? super VillagerEntity>>>> cir) {
+        if (profession.matchesKey(VillagerProfession.TOOLSMITH) || profession.matchesKey(VillagerProfession.WEAPONSMITH) && GuardVillagersConfig.blackSmithHealing) {
             List<Pair<Integer, ? extends Task<? super VillagerEntity>>> villagerList = new ArrayList<>(cir.getReturnValue());
             villagerList.add(Pair.of(2, new CompositeTask<>(ImmutableMap.of(), ImmutableSet.of(MemoryModuleType.INTERACTION_TARGET), CompositeTask.Order.ORDERED, CompositeTask.RunMode.RUN_ONE, ImmutableList.of(Pair.of(new RepairGolemTask(), 1), Pair.of(new GatherItemsVillagerTask(), 1)))));
             cir.setReturnValue(ImmutableList.copyOf(villagerList));

@@ -3,6 +3,8 @@
   "item.guardvillagers.guard_spawn_egg": "Guard Spawn Egg",
   "guardinventory.health": "Health: %s",
   "guardinventory.armor": "Armor: %s",
+  "guardvillagers.midnightconfig.reputationRequirementToBeAttacked": "Reputation To Be Attacked",
+  "guardvillagers.midnightconfig.reputationRequirement": "Reputation To Trade",
   "guardvillagers.midnightconfig.useSteveModel": "Use Steve Model",
   "guardvillagers.midnightconfig.guardsRunFromPolarBears": "Guards Run From Polar Bear",
   "guardvillagers.midnightconfig.guardFormation": "Guard Formation",

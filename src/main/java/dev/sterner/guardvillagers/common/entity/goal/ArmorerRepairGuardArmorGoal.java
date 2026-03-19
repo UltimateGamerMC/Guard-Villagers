@@ -1,9 +1,11 @@
 package dev.sterner.guardvillagers.common.entity.goal;
 
 import dev.sterner.guardvillagers.common.entity.GuardEntity;
+import net.minecraft.component.DataComponentTypes;
+import net.minecraft.component.type.EquippableComponent;
+import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.ai.goal.Goal;
 import net.minecraft.entity.passive.VillagerEntity;
-import net.minecraft.item.ArmorItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.village.VillagerProfession;
 
@@ -19,22 +21,23 @@ public class ArmorerRepairGuardArmorGoal extends Goal {
 
     @Override
     public boolean canStart() {
-        List<VillagerEntity> list = this.guard.getWorld().getNonSpectatingEntities(VillagerEntity.class, this.guard.getBoundingBox().expand(10.0D, 3.0D, 10.0D));
+        List<VillagerEntity> list = this.guard.getEntityWorld().getNonSpectatingEntities(VillagerEntity.class, this.guard.getBoundingBox().expand(10.0D, 3.0D, 10.0D));
         if (!list.isEmpty()) {
             for (VillagerEntity mob : list) {
                 if (mob != null) {
-                    boolean isArmorerOrWeaponSmith = mob.getVillagerData().getProfession() == VillagerProfession.ARMORER || mob.getVillagerData().getProfession() == VillagerProfession.WEAPONSMITH;
+                    var prof = mob.getVillagerData().profession();
+                    boolean isArmorerOrWeaponSmith = prof.matchesKey(VillagerProfession.ARMORER) || prof.matchesKey(VillagerProfession.WEAPONSMITH);
                     if (isArmorerOrWeaponSmith && guard.getTarget() == null) {
-                        if (mob.getVillagerData().getProfession() == VillagerProfession.ARMORER) {
+                        if (prof.matchesKey(VillagerProfession.ARMORER)) {
                             for (int i = 0; i < guard.guardInventory.size() - 2; ++i) {
                                 ItemStack itemstack = guard.guardInventory.getStack(i);
-                                if (itemstack.isDamaged() && itemstack.getItem() instanceof ArmorItem && itemstack.getDamage() >= itemstack.getMaxDamage() / 2) {
+                                if (itemstack.isDamaged() && isArmor(itemstack) && itemstack.getDamage() >= itemstack.getMaxDamage() / 2) {
                                     this.villager = mob;
                                     return true;
                                 }
                             }
                         }
-                        if (mob.getVillagerData().getProfession() == VillagerProfession.WEAPONSMITH) {
+                        if (prof.matchesKey(VillagerProfession.WEAPONSMITH)) {
                             for (int i = 4; i < 6; ++i) {
                                 ItemStack itemstack = guard.guardInventory.getStack(i);
                                 if (itemstack.isDamaged() && itemstack.getDamage() >= itemstack.getMaxDamage() / 2) {
@@ -50,6 +53,11 @@ public class ArmorerRepairGuardArmorGoal extends Goal {
         return false;
     }
 
+    private static boolean isArmor(ItemStack stack) {
+        EquippableComponent c = stack.get(DataComponentTypes.EQUIPPABLE);
+        return c != null && c.slot().isArmorSlot();
+    }
+
     @Override
     public void tick() {
         guard.getLookControl().lookAt(villager, 30.0F, 30.0F);
@@ -57,16 +65,16 @@ public class ArmorerRepairGuardArmorGoal extends Goal {
             guard.getNavigation().startMovingTo(villager, 0.5D);
             villager.getNavigation().startMovingTo(guard, 0.5D);
         } else {
-            VillagerProfession profession = villager.getVillagerData().getProfession();
-            if (profession == VillagerProfession.ARMORER) {
+            var profession = villager.getVillagerData().profession();
+            if (profession.matchesKey(VillagerProfession.ARMORER)) {
                 for (int i = 0; i < guard.guardInventory.size() - 2; ++i) {
                     ItemStack itemstack = guard.guardInventory.getStack(i);
-                    if (itemstack.isDamaged() && itemstack.getItem() instanceof ArmorItem && itemstack.getDamage() >= itemstack.getMaxDamage() / 2 + guard.getRandom().nextInt(5)) {
+                    if (itemstack.isDamaged() && isArmor(itemstack) && itemstack.getDamage() >= itemstack.getMaxDamage() / 2 + guard.getRandom().nextInt(5)) {
                         itemstack.setDamage(itemstack.getDamage() - guard.getRandom().nextInt(5));
                     }
                 }
             }
-            if (profession == VillagerProfession.WEAPONSMITH) {
+            if (profession.matchesKey(VillagerProfession.WEAPONSMITH)) {
                 for (int i = 4; i < 6; ++i) {
                     ItemStack itemstack = guard.guardInventory.getStack(i);
                     if (itemstack.isDamaged() && itemstack.getDamage() >= itemstack.getMaxDamage() / 2 + guard.getRandom().nextInt(5)) {

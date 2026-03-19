@@ -27,11 +27,11 @@ public class HealGolemGoal extends Goal {
 
     @Override
     public boolean canStart() {
-        if (((VillagerEntity) this.healer).getVillagerData().getProfession() != VillagerProfession.WEAPONSMITH && (((VillagerEntity) this.healer).getVillagerData().getProfession() != VillagerProfession.TOOLSMITH)
-                && (((VillagerEntity) this.healer).getVillagerData().getProfession() != VillagerProfession.ARMORER) || this.healer.isSleeping()) {
+        var profession = ((VillagerEntity) this.healer).getVillagerData().profession();
+        if ((!profession.matchesKey(VillagerProfession.WEAPONSMITH) && !profession.matchesKey(VillagerProfession.TOOLSMITH) && !profession.matchesKey(VillagerProfession.ARMORER)) || this.healer.isSleeping()) {
             return false;
         }
-        List<IronGolemEntity> list = this.healer.getWorld().getNonSpectatingEntities(IronGolemEntity.class, this.healer.getBoundingBox().expand(10.0D));
+        List<IronGolemEntity> list = this.healer.getEntityWorld().getNonSpectatingEntities(IronGolemEntity.class, this.healer.getBoundingBox().expand(10.0D));
         if (!list.isEmpty()) {
             for (IronGolemEntity golem : list) {
                 if (!golem.isInvisible() && golem.isAlive() && golem.getType() == EntityType.IRON_GOLEM) {

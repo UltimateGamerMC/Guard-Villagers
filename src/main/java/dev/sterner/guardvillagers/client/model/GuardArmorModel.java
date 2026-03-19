@@ -1,10 +1,10 @@
 package dev.sterner.guardvillagers.client.model;
 
-import dev.sterner.guardvillagers.common.entity.GuardEntity;
 import net.minecraft.client.model.*;
 import net.minecraft.client.render.entity.model.BipedEntityModel;
+import net.minecraft.client.render.entity.state.BipedEntityRenderState;
 
-public class GuardArmorModel extends BipedEntityModel<GuardEntity> {
+public class GuardArmorModel extends BipedEntityModel<BipedEntityRenderState> {
     public GuardArmorModel(ModelPart part) {
         super(part);
     }
@@ -12,7 +12,7 @@ public class GuardArmorModel extends BipedEntityModel<GuardEntity> {
     public static TexturedModelData createOuterArmorLayer() {
         ModelData modelData = BipedEntityModel.getModelData(new Dilation(1.0F), 0.0F);
         ModelPartData modelPartData = modelData.getRoot();
-        modelPartData.addChild("head", ModelPartBuilder.create().uv(0, 0).cuboid(-4.0F, -10.0F, -4.0F, 8.0F, 8.0F, 8.0F, new Dilation(1.0F)), ModelTransform.pivot(0.0F, 1.0F, 0.0F));
+        modelPartData.addChild("head", ModelPartBuilder.create().uv(0, 0).cuboid(-4.0F, -10.0F, -4.0F, 8.0F, 8.0F, 8.0F, new Dilation(1.0F)), ModelTransform.origin(0.0F, 1.0F, 0.0F));
         return TexturedModelData.of(modelData, 64, 32);
     }
 

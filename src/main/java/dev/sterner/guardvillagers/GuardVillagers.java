@@ -9,22 +9,25 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents;
+import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.fabricmc.fabric.api.object.builder.v1.entity.FabricDefaultAttributeRegistry;
-import net.fabricmc.fabric.api.object.builder.v1.entity.FabricEntityTypeBuilder;
 import net.fabricmc.fabric.api.screenhandler.v1.ExtendedScreenHandlerType;
+import net.minecraft.network.codec.PacketCodecs;
 import net.minecraft.entity.*;
 import net.minecraft.entity.ai.brain.MemoryModuleType;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.effect.StatusEffects;
-import net.minecraft.entity.mob.*;
-import net.minecraft.entity.passive.*;
+import net.minecraft.entity.mob.MobEntity;
+import net.minecraft.entity.passive.VillagerEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.*;
 import net.minecraft.particle.ParticleEffect;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
+import net.minecraft.registry.RegistryKey;
+import net.minecraft.registry.RegistryKeys;
 import net.minecraft.screen.ScreenHandlerType;
 import net.minecraft.sound.SoundEvent;
 import net.minecraft.sound.SoundEvents;
@@ -42,34 +45,35 @@ import java.util.function.Predicate;
 public class GuardVillagers implements ModInitializer {
     public static final String MODID = "guardvillagers";
 
-    public static final ScreenHandlerType<GuardVillagerScreenHandler> GUARD_SCREEN_HANDLER = new ExtendedScreenHandlerType<>(GuardVillagerScreenHandler::new);
+    public static final ScreenHandlerType<GuardVillagerScreenHandler> GUARD_SCREEN_HANDLER = new ExtendedScreenHandlerType<>(GuardVillagerScreenHandler::create, PacketCodecs.VAR_INT);
 
-    public static final EntityType<GuardEntity> GUARD_VILLAGER = Registry.register(Registries.ENTITY_TYPE, new Identifier(GuardVillagers.MODID, "guard"),
-            FabricEntityTypeBuilder.create(SpawnGroup.CREATURE, GuardEntity::new).dimensions(EntityDimensions.fixed(0.6f, 1.8f)).build());
+    public static final EntityType<GuardEntity> GUARD_VILLAGER = Registry.register(Registries.ENTITY_TYPE, RegistryKey.of(RegistryKeys.ENTITY_TYPE, Identifier.of(MODID, "guard")),
+            EntityType.Builder.create(GuardEntity::new, SpawnGroup.CREATURE).dimensions(0.6f, 1.8f).build(RegistryKey.of(RegistryKeys.ENTITY_TYPE, Identifier.of(MODID, "guard"))));
 
-    public static final Item GUARD_SPAWN_EGG = new SpawnEggItem(GUARD_VILLAGER, 5651507, 8412749, new Item.Settings());
+    public static final Item GUARD_SPAWN_EGG = Registry.register(Registries.ITEM, Identifier.of(MODID, "guard_spawn_egg"), new SpawnEggItem(new Item.Settings().registryKey(RegistryKey.of(RegistryKeys.ITEM, Identifier.of(MODID, "guard_spawn_egg"))).spawnEgg(GUARD_VILLAGER)));
 
     public static Hand getHandWith(LivingEntity livingEntity, Predicate<Item> itemPredicate) {
         return itemPredicate.test(livingEntity.getMainHandStack().getItem()) ? Hand.MAIN_HAND : Hand.OFF_HAND;
     }
 
-    public static SoundEvent GUARD_AMBIENT = SoundEvent.of(new Identifier(MODID, "entity.guard.ambient"));
-    public static SoundEvent GUARD_HURT = SoundEvent.of(new Identifier(MODID, "entity.guard.hurt"));
-    public static SoundEvent GUARD_DEATH = SoundEvent.of(new Identifier(MODID, "entity.guard.death"));
+    public static SoundEvent GUARD_AMBIENT = SoundEvent.of(Identifier.of(MODID, "entity.guard.ambient"));
+    public static SoundEvent GUARD_HURT = SoundEvent.of(Identifier.of(MODID, "entity.guard.hurt"));
+    public static SoundEvent GUARD_DEATH = SoundEvent.of(Identifier.of(MODID, "entity.guard.death"));
 
     @Override
     public void onInitialize() {
         MidnightConfig.init(MODID, GuardVillagersConfig.class);
         FabricDefaultAttributeRegistry.register(GUARD_VILLAGER, GuardEntity.createAttributes());
 
-        Registry.register(Registries.ITEM, new Identifier(MODID, "guard_spawn_egg"), GUARD_SPAWN_EGG);
-        Registry.register(Registries.SCREEN_HANDLER, new Identifier("guard_screen"), GUARD_SCREEN_HANDLER);
-        Registry.register(Registries.SOUND_EVENT, new Identifier(MODID, "entity.guard.ambient"), GUARD_AMBIENT);
-        Registry.register(Registries.SOUND_EVENT, new Identifier(MODID, "entity.guard.hurt"), GUARD_HURT);
-        Registry.register(Registries.SOUND_EVENT, new Identifier(MODID, "entity.guard.death"), GUARD_DEATH);
+        Registry.register(Registries.SCREEN_HANDLER, Identifier.of(MODID, "guard_screen"), GUARD_SCREEN_HANDLER);
+        Registry.register(Registries.SOUND_EVENT, Identifier.of(MODID, "entity.guard.ambient"), GUARD_AMBIENT);
+        Registry.register(Registries.SOUND_EVENT, Identifier.of(MODID, "entity.guard.hurt"), GUARD_HURT);
+        Registry.register(Registries.SOUND_EVENT, Identifier.of(MODID, "entity.guard.death"), GUARD_DEATH);
 
-        ServerPlayNetworking.registerGlobalReceiver(GuardFollowPacket.PACKET_TYPE, GuardFollowPacket::handle);
-        ServerPlayNetworking.registerGlobalReceiver(GuardPatrolPacket.PACKET_TYPE, GuardPatrolPacket::handle);
+        PayloadTypeRegistry.playC2S().register(GuardFollowPacket.ID, GuardFollowPacket.TYPE.codec());
+        PayloadTypeRegistry.playC2S().register(GuardPatrolPacket.ID, GuardPatrolPacket.TYPE.codec());
+        ServerPlayNetworking.registerGlobalReceiver(GuardFollowPacket.ID, GuardFollowPacket::handle);
+        ServerPlayNetworking.registerGlobalReceiver(GuardPatrolPacket.ID, GuardPatrolPacket::handle);
 
         ItemGroupEvents.modifyEntriesEvent(ItemGroups.FUNCTIONAL).register(entries -> entries.add(GUARD_SPAWN_EGG));
 
@@ -88,7 +92,7 @@ public class GuardVillagers implements ModInitializer {
             shouldDamage = false;
         }
         if (isVillager && attacker instanceof MobEntity) {
-            List<MobEntity> list = attacker.getWorld().getNonSpectatingEntities(MobEntity.class, attacker.getBoundingBox().expand(GuardVillagersConfig.guardVillagerHelpRange, 5.0D, GuardVillagersConfig.guardVillagerHelpRange));
+            List<MobEntity> list = attacker.getEntityWorld().getNonSpectatingEntities(MobEntity.class, attacker.getBoundingBox().expand(GuardVillagersConfig.guardVillagerHelpRange, 5.0D, GuardVillagersConfig.guardVillagerHelpRange));
             for (MobEntity mob : list) {
                 boolean type = mob.getType() == GUARD_VILLAGER || mob.getType() == EntityType.IRON_GOLEM;
                 boolean trueSourceGolem = attacker.getType() == GUARD_VILLAGER || attacker.getType() == EntityType.IRON_GOLEM;
@@ -101,12 +105,13 @@ public class GuardVillagers implements ModInitializer {
 
     private ActionResult villagerConvert(PlayerEntity player, World world, Hand hand, Entity entity, @Nullable EntityHitResult entityHitResult) {
         ItemStack itemStack = player.getStackInHand(hand);
-        if ((itemStack.getItem() instanceof SwordItem || itemStack.getItem() instanceof CrossbowItem) && player.isSneaking()) {
+        if ((itemStack.isIn(net.minecraft.registry.tag.ItemTags.SWORDS) || itemStack.getItem() instanceof CrossbowItem) && player.isSneaking()) {
             if (entityHitResult != null) {
                 Entity target = entityHitResult.getEntity();
                 if (target instanceof VillagerEntity villagerEntity) {
                     if (!villagerEntity.isBaby()) {
-                        if (villagerEntity.getVillagerData().getProfession() == VillagerProfession.NONE || villagerEntity.getVillagerData().getProfession() == VillagerProfession.NITWIT) {
+                        var profession = villagerEntity.getVillagerData().profession();
+                        if (profession.matchesKey(VillagerProfession.NONE) || profession.matchesKey(VillagerProfession.NITWIT)) {
                             if (!GuardVillagersConfig.convertVillagerIfHaveHotv || player.hasStatusEffect(StatusEffects.HERO_OF_THE_VILLAGE) && GuardVillagersConfig.convertVillagerIfHaveHotv) {
                                 convertVillager(villagerEntity, player, world);
                                 if (!player.getAbilities().creativeMode)
@@ -117,25 +122,23 @@ public class GuardVillagers implements ModInitializer {
                     }
                 }
             }
-
         }
-
         return ActionResult.PASS;
     }
 
     private void convertVillager(VillagerEntity villagerEntity, PlayerEntity player, World world) {
         player.swingHand(Hand.MAIN_HAND);
         ItemStack itemstack = player.getEquippedStack(EquipmentSlot.MAINHAND);
-        GuardEntity guard = GUARD_VILLAGER.create(world);
+        GuardEntity guard = GUARD_VILLAGER.create(world, SpawnReason.CONVERSION);
         if (guard == null)
             return;
-        if (player.getWorld().isClient()) {
+        if (player.getEntityWorld().isClient()) {
             ParticleEffect particleEffect = ParticleTypes.HAPPY_VILLAGER;
             for (int i = 0; i < 10; ++i) {
                 double d0 = villagerEntity.getRandom().nextGaussian() * 0.02D;
                 double d1 = villagerEntity.getRandom().nextGaussian() * 0.02D;
                 double d2 = villagerEntity.getRandom().nextGaussian() * 0.02D;
-                villagerEntity.getWorld().addParticle(particleEffect, villagerEntity.getX() + (double) (villagerEntity.getRandom().nextFloat() * villagerEntity.getWidth() * 2.0F) - (double) villagerEntity.getWidth(), villagerEntity.getY() + 0.5D + (double) (villagerEntity.getRandom().nextFloat() * villagerEntity.getWidth()),
+                villagerEntity.getEntityWorld().addParticleClient(particleEffect, villagerEntity.getX() + (double) (villagerEntity.getRandom().nextFloat() * villagerEntity.getWidth() * 2.0F) - (double) villagerEntity.getWidth(), villagerEntity.getY() + 0.5D + (double) (villagerEntity.getRandom().nextFloat() * villagerEntity.getWidth()),
                         villagerEntity.getZ() + (double) (villagerEntity.getRandom().nextFloat() * villagerEntity.getWidth() * 2.0F) - (double) villagerEntity.getWidth(), d0, d1, d2);
             }
         }
@@ -146,7 +149,7 @@ public class GuardVillagers implements ModInitializer {
         guard.equipStack(EquipmentSlot.MAINHAND, itemstack.copy());
         guard.guardInventory.setStack(5, itemstack.copy());
 
-        int i = GuardEntity.getRandomTypeForBiome(guard.getWorld(), guard.getBlockPos());
+        int i = GuardEntity.getRandomTypeForBiome(guard.getEntityWorld(), guard.getBlockPos());
         guard.setGuardVariant(i);
         guard.setPersistent();
         guard.setCustomName(villagerEntity.getCustomName());
@@ -166,6 +169,6 @@ public class GuardVillagers implements ModInitializer {
 
     public static boolean hotvChecker(PlayerEntity player, GuardEntity guard) {
         return player.hasStatusEffect(StatusEffects.HERO_OF_THE_VILLAGE) && GuardVillagersConfig.giveGuardStuffHotv
-                || !GuardVillagersConfig.giveGuardStuffHotv || guard.getPlayerEntityReputation(player) > GuardVillagersConfig.reputationRequirement && !player.getWorld().isClient();
+                || !GuardVillagersConfig.giveGuardStuffHotv || guard.getPlayerEntityReputation(player) > GuardVillagersConfig.reputationRequirement && !player.getEntityWorld().isClient();
     }
 }

@@ -2,53 +2,31 @@ package dev.sterner.guardvillagers.common.network;
 
 import dev.sterner.guardvillagers.GuardVillagers;
 import dev.sterner.guardvillagers.common.entity.GuardEntity;
-import net.fabricmc.fabric.api.networking.v1.FabricPacket;
-import net.fabricmc.fabric.api.networking.v1.PacketSender;
-import net.fabricmc.fabric.api.networking.v1.PacketType;
-import net.minecraft.entity.Entity;
-import net.minecraft.network.PacketByteBuf;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.network.RegistryByteBuf;
+import net.minecraft.network.codec.PacketCodec;
+import net.minecraft.network.codec.PacketCodecs;
+import net.minecraft.network.packet.CustomPayload;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.Identifier;
-import net.minecraft.util.math.BlockPos;
 
-public class GuardPatrolPacket implements FabricPacket {
-    public static final PacketType<GuardPatrolPacket> PACKET_TYPE = PacketType.create(new Identifier(GuardVillagers.MODID, "guard_patrol"), GuardPatrolPacket::read);
-    private final int id;
-    private final boolean pressed;
+public record GuardPatrolPacket(int id, boolean pressed) implements CustomPayload {
+    public static final CustomPayload.Id<GuardPatrolPacket> ID = new CustomPayload.Id<>(Identifier.of(GuardVillagers.MODID, "guard_patrol"));
+    public static final CustomPayload.Type<RegistryByteBuf, GuardPatrolPacket> TYPE = new CustomPayload.Type<>(ID, PacketCodec.tuple(PacketCodecs.VAR_INT, GuardPatrolPacket::id, PacketCodecs.BOOLEAN, GuardPatrolPacket::pressed, GuardPatrolPacket::new));
 
-    public GuardPatrolPacket(int id, boolean pressed) {
-        this.id = id;
-        this.pressed = pressed;
-    }
-
-    public static void handle(GuardPatrolPacket packet, ServerPlayerEntity serverPlayerEntity, PacketSender buf) {
-        int entityId = packet.id;
-        boolean pressed = packet.pressed;
-
-        Entity entity = serverPlayerEntity.getWorld().getEntityById(entityId);
-        if (entity instanceof GuardEntity guardEntity) {
-            BlockPos pos = guardEntity.getBlockPos();
-            if (guardEntity.getBlockPos() != null) {
-                guardEntity.setPatrolPos(pos);
+    public static void handle(GuardPatrolPacket packet, ServerPlayNetworking.Context context) {
+        ServerPlayerEntity player = context.player();
+        var entity = player.getEntityWorld().getEntityById(packet.id());
+        if (entity instanceof GuardEntity guard) {
+            if (packet.pressed()) {
+                guard.setPatrolPos(guard.getBlockPos());
             }
-            guardEntity.setPatrolling(pressed);
+            guard.setPatrolling(packet.pressed());
         }
     }
 
-    private static GuardPatrolPacket read(PacketByteBuf buf) {
-        int id = buf.readInt();
-        boolean pressed = buf.readBoolean();
-        return new GuardPatrolPacket(id, pressed);
-    }
-
     @Override
-    public void write(PacketByteBuf buf) {
-        buf.writeInt(id);
-        buf.writeBoolean(pressed);
-    }
-
-    @Override
-    public PacketType<?> getType() {
-        return PACKET_TYPE;
+    public CustomPayload.Id<? extends CustomPayload> getId() {
+        return ID;
     }
 }

@@ -19,11 +19,11 @@ public class RunToClericGoal extends Goal {
 
     @Override
     public boolean canStart() {
-        List<VillagerEntity> list = this.guard.getWorld().getNonSpectatingEntities(VillagerEntity.class, this.guard.getBoundingBox().expand(10.0D, 3.0D, 10.0D));
+        List<VillagerEntity> list = this.guard.getEntityWorld().getNonSpectatingEntities(VillagerEntity.class, this.guard.getBoundingBox().expand(10.0D, 3.0D, 10.0D));
         if (!list.isEmpty()) {
             for (VillagerEntity mob : list) {
                 if (mob != null) {
-                    if (mob.getVillagerData().getProfession() == VillagerProfession.CLERIC && guard.getHealth() < guard.getMaxHealth() && guard.getTarget() == null && !guard.hasStatusEffect(StatusEffects.REGENERATION)) {
+                    if (mob.getVillagerData().profession().matchesKey(VillagerProfession.CLERIC) && guard.getHealth() < guard.getMaxHealth() && guard.getTarget() == null && !guard.hasStatusEffect(StatusEffects.REGENERATION)) {
                         this.cleric = mob;
                         return GuardVillagersConfig.clericHealing;
                     }
