@@ -5,99 +5,94 @@ import dev.sterner.guardvillagers.common.entity.GuardEntity;
 import dev.sterner.guardvillagers.common.entity.goal.AttackEntityDaytimeGoal;
 import dev.sterner.guardvillagers.common.entity.goal.HealGolemGoal;
 import dev.sterner.guardvillagers.common.entity.goal.HealGuardAndPlayerGoal;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.ai.goal.ActiveTargetGoal;
-import net.minecraft.entity.ai.goal.FleeEntityGoal;
-import net.minecraft.entity.ai.goal.PrioritizedGoal;
-import net.minecraft.entity.ai.goal.RevengeGoal;
-import net.minecraft.entity.mob.*;
-import net.minecraft.entity.passive.*;
-import net.minecraft.entity.raid.RaiderEntity;
-import net.minecraft.registry.DynamicRegistryManager;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.entry.RegistryEntry;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.world.MutableWorldProperties;
-import net.minecraft.world.StructureWorldAccess;
-import net.minecraft.world.World;
-import net.minecraft.world.dimension.DimensionType;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.animal.Animal;
+import net.minecraft.world.entity.animal.feline.Cat;
+import net.minecraft.world.entity.animal.polarbear.PolarBear;
+import net.minecraft.world.entity.monster.Monster;
+import net.minecraft.world.entity.monster.spider.Spider;
+import net.minecraft.world.entity.monster.Witch;
+import net.minecraft.world.entity.monster.zombie.Zombie;
+import net.minecraft.world.entity.monster.illager.AbstractIllager;
+import net.minecraft.world.entity.monster.Ravager;
+import net.minecraft.world.entity.npc.villager.Villager;
+import net.minecraft.world.entity.animal.golem.IronGolem;
+import net.minecraft.world.entity.ai.goal.AvoidEntityGoal;
+import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
+import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
+import net.minecraft.world.entity.raid.Raider;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-@Mixin(ServerWorld.class)
-public abstract class ServerWorldMixin extends World implements StructureWorldAccess {
-
-    protected ServerWorldMixin(MutableWorldProperties properties, RegistryKey<World> registryRef, DynamicRegistryManager registryManager, RegistryEntry<DimensionType> dimensionEntry, boolean isClient, boolean debugWorld, long biomeAccess, int maxChainedNeighborUpdates) {
-        super(properties, registryRef, registryManager, dimensionEntry, isClient, debugWorld, biomeAccess, maxChainedNeighborUpdates);
-    }
-
-    @Inject(method = "spawnEntity", at = @At("TAIL"))
+@Mixin(ServerLevel.class)
+public abstract class ServerWorldMixin {
+    @Inject(method = "addFreshEntity", at = @At("TAIL"))
     private void onSpawn(Entity entity, CallbackInfoReturnable<Boolean> cir) {
+        if (!cir.getReturnValue()) return;
         if (GuardVillagersConfig.raidAnimals) {
-            if (entity instanceof RaiderEntity raiderEntity)
-                if (raiderEntity.hasActiveRaid()) {
-                    raiderEntity.targetSelector.add(5, new ActiveTargetGoal<>(raiderEntity, AnimalEntity.class, false));
-                }
+            if (entity instanceof Raider raider && raider.hasActiveRaid()) {
+                raider.targetSelector.addGoal(5, new NearestAttackableTargetGoal<>(raider, Animal.class, false));
+            }
         }
 
         if (GuardVillagersConfig.attackAllMobs) {
-            if (entity instanceof HostileEntity && !(entity instanceof SpiderEntity)) {
-                MobEntity mob = (MobEntity) entity;
-                mob.targetSelector.add(2, new ActiveTargetGoal<>(mob, GuardEntity.class, false));
+            if (entity instanceof Monster && !(entity instanceof Spider)) {
+                Mob mob = (Mob) entity;
+                mob.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(mob, GuardEntity.class, false));
             }
-            if (entity instanceof SpiderEntity spider) {
-                spider.targetSelector.add(3, new AttackEntityDaytimeGoal<>(spider, GuardEntity.class));
+            if (entity instanceof Spider spider) {
+                spider.targetSelector.addGoal(3, new AttackEntityDaytimeGoal<>(spider, GuardEntity.class));
             }
         }
 
-        if (entity instanceof IllagerEntity illager) {
+        if (entity instanceof AbstractIllager illager) {
             if (GuardVillagersConfig.illagersRunFromPolarBears) {
-                illager.goalSelector.add(2, new FleeEntityGoal<>(illager, PolarBearEntity.class, 6.0F, 1.0D, 1.2D));
+                illager.goalSelector.addGoal(2, new AvoidEntityGoal<>(illager, PolarBear.class, 6.0F, 1.0D, 1.2D));
             }
-
-            illager.targetSelector.add(2, new ActiveTargetGoal<>(illager, GuardEntity.class, false));
+            illager.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(illager, GuardEntity.class, false));
         }
 
-        if (entity instanceof VillagerEntity villagerEntity) {
+        if (entity instanceof Villager villagerEntity) {
             if (GuardVillagersConfig.villagersRunFromPolarBears)
-                villagerEntity.goalSelector.add(2, new FleeEntityGoal<>(villagerEntity, PolarBearEntity.class, 6.0F, 1.0D, 1.2D));
+                villagerEntity.goalSelector.addGoal(2, new AvoidEntityGoal<>(villagerEntity, PolarBear.class, 6.0F, 1.0D, 1.2D));
             if (GuardVillagersConfig.witchesVillager)
-                villagerEntity.goalSelector.add(2, new FleeEntityGoal<>(villagerEntity, WitchEntity.class, 6.0F, 1.0D, 1.2D));
-
+                villagerEntity.goalSelector.addGoal(2, new AvoidEntityGoal<>(villagerEntity, Witch.class, 6.0F, 1.0D, 1.2D));
             if (GuardVillagersConfig.blackSmithHealing)
-                villagerEntity.goalSelector.add(1, new HealGolemGoal(villagerEntity));
+                villagerEntity.goalSelector.addGoal(1, new HealGolemGoal(villagerEntity));
             if (GuardVillagersConfig.clericHealing)
-                villagerEntity.goalSelector.add(1, new HealGuardAndPlayerGoal(villagerEntity, 1.0D, 100, 0, 10.0F));
+                villagerEntity.goalSelector.addGoal(1, new HealGuardAndPlayerGoal(villagerEntity, 1.0D, 100, 0, 10.0F));
         }
 
-        if (entity instanceof IronGolemEntity golem) {
-            RevengeGoal tolerateFriendlyFire = new RevengeGoal(golem, GuardEntity.class).setGroupRevenge();
-            golem.targetSelector.getGoals().stream().map(PrioritizedGoal::getGoal).filter(it -> it instanceof RevengeGoal).findFirst().ifPresent(angerGoal -> {
-                golem.targetSelector.remove(angerGoal);
-                golem.targetSelector.add(2, tolerateFriendlyFire);
+        if (entity instanceof IronGolem golem) {
+            HurtByTargetGoal tolerateFriendlyFire = new HurtByTargetGoal(golem).setAlertOthers();
+            golem.targetSelector.getAvailableGoals().stream().map(w -> w.getGoal()).filter(it -> it instanceof HurtByTargetGoal).findFirst().ifPresent(angerGoal -> {
+                golem.targetSelector.removeGoal(angerGoal);
+                golem.targetSelector.addGoal(2, tolerateFriendlyFire);
             });
         }
 
-        if (entity instanceof ZombieEntity zombie) {
-            zombie.targetSelector.add(3, new ActiveTargetGoal<>(zombie, GuardEntity.class, false));
+        if (entity instanceof Zombie zombie) {
+            zombie.targetSelector.addGoal(3, new NearestAttackableTargetGoal<>(zombie, GuardEntity.class, false));
         }
 
-        if (entity instanceof RavagerEntity ravager) {
-            ravager.targetSelector.add(2, new ActiveTargetGoal<>(ravager, GuardEntity.class, false));
+        if (entity instanceof Ravager ravager) {
+            ravager.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(ravager, GuardEntity.class, false));
         }
 
-        if (entity instanceof WitchEntity witch) {
+        if (entity instanceof Witch witch) {
             if (GuardVillagersConfig.witchesVillager) {
-                witch.targetSelector.add(3, new ActiveTargetGoal<>(witch, VillagerEntity.class, true));
-                witch.targetSelector.add(3, new ActiveTargetGoal<>(witch, IronGolemEntity.class, true));
-                witch.targetSelector.add(3, new ActiveTargetGoal<>(witch, GuardEntity.class, true));
+                witch.targetSelector.addGoal(3, new NearestAttackableTargetGoal<>(witch, Villager.class, true));
+                witch.targetSelector.addGoal(3, new NearestAttackableTargetGoal<>(witch, IronGolem.class, true));
+                witch.targetSelector.addGoal(3, new NearestAttackableTargetGoal<>(witch, GuardEntity.class, true));
             }
         }
 
-        if (entity instanceof CatEntity cat) {
-            cat.goalSelector.add(1, new FleeEntityGoal<>(cat, IllagerEntity.class, 12.0F, 1.0D, 1.2D));
+        if (entity instanceof Cat cat) {
+            cat.goalSelector.addGoal(1, new AvoidEntityGoal<>(cat, AbstractIllager.class, 12.0F, 1.0D, 1.2D));
         }
     }
 }

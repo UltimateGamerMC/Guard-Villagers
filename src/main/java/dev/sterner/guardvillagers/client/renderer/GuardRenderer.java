@@ -3,83 +3,85 @@ package dev.sterner.guardvillagers.client.renderer;
 import dev.sterner.guardvillagers.GuardVillagers;
 import dev.sterner.guardvillagers.GuardVillagersClient;
 import dev.sterner.guardvillagers.GuardVillagersConfig;
-import dev.sterner.guardvillagers.client.model.GuardArmorModel;
 import dev.sterner.guardvillagers.client.model.GuardVillagerModel;
 import dev.sterner.guardvillagers.common.entity.GuardEntity;
-import net.minecraft.client.render.entity.BipedEntityRenderer;
-import net.minecraft.client.render.entity.EntityRendererFactory;
-import net.minecraft.client.render.entity.feature.ArmorFeatureRenderer;
-import net.minecraft.client.render.entity.model.BipedEntityModel;
-import net.minecraft.client.render.entity.model.EntityModelLayer;
-import net.minecraft.client.render.entity.model.EntityModelLayers;
-import net.minecraft.client.render.entity.model.EquipmentModelData;
-import net.minecraft.client.render.entity.state.BipedEntityRenderState;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.item.CrossbowItem;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.consume.UseAction;
-import net.minecraft.registry.tag.ItemTags;
-import net.minecraft.util.Arm;
-import net.minecraft.util.Hand;
-import net.minecraft.util.Identifier;
+import net.minecraft.client.model.HumanoidModel;
+import net.minecraft.client.model.geom.ModelLayers;
+import net.minecraft.client.renderer.entity.ArmorModelSet;
+import net.minecraft.client.renderer.entity.EntityRendererProvider;
+import net.minecraft.client.renderer.entity.HumanoidMobRenderer;
+import net.minecraft.client.renderer.entity.layers.HumanoidArmorLayer;
+import net.minecraft.client.renderer.entity.state.HumanoidRenderState;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.resources.Identifier;
+import net.minecraft.tags.ItemTags;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.HumanoidArm;
+import net.minecraft.world.item.CrossbowItem;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.ItemUseAnimation;
+import net.minecraft.world.item.SwingAnimationType;
+import com.mojang.blaze3d.vertex.PoseStack;
 import org.jetbrains.annotations.Nullable;
 
-public class GuardRenderer extends BipedEntityRenderer<GuardEntity, BipedEntityRenderState, BipedEntityModel<BipedEntityRenderState>> {
+public class GuardRenderer extends HumanoidMobRenderer<GuardEntity, HumanoidRenderState, GuardVillagerModel> {
 
     private GuardEntity currentEntity;
 
-    public GuardRenderer(EntityRendererFactory.Context context) {
-        super(context, new GuardVillagerModel(context.getPart(GuardVillagersClient.GUARD)), 0.5F);
-        EquipmentModelData<BipedEntityModel<BipedEntityRenderState>> armorData = GuardVillagersConfig.useSteveModel
-                ? EquipmentModelData.mapToEntityModel(EntityModelLayers.PLAYER_EQUIPMENT, context.getEntityModels(), part -> new BipedEntityModel<>(part))
-                : EquipmentModelData.mapToEntityModel(new EquipmentModelData<>(GuardVillagersClient.GUARD_ARMOR_INNER, GuardVillagersClient.GUARD_ARMOR_INNER, GuardVillagersClient.GUARD_ARMOR_INNER, GuardVillagersClient.GUARD_ARMOR_INNER), context.getEntityModels(), GuardArmorModel::new);
-        this.addFeature(new ArmorFeatureRenderer<>(this, armorData, armorData, context.getEquipmentRenderer()));
+    public GuardRenderer(EntityRendererProvider.Context context) {
+        super(context, new GuardVillagerModel(context.bakeLayer(GuardVillagersClient.GUARD)), 0.5F);
+        ArmorModelSet<HumanoidModel<HumanoidRenderState>> inner = ArmorModelSet.bake(ModelLayers.PLAYER_ARMOR, context.getModelSet(), HumanoidModel::new);
+        this.addLayer(new HumanoidArmorLayer<HumanoidRenderState, GuardVillagerModel, HumanoidModel<HumanoidRenderState>>(this, inner, context.getEquipmentRenderer()));
     }
 
     @Override
-    public BipedEntityRenderState createRenderState() {
-        return new BipedEntityRenderState();
+    public HumanoidRenderState createRenderState() {
+        return new HumanoidRenderState();
     }
 
     @Override
-    public void updateRenderState(GuardEntity entity, BipedEntityRenderState state, float tickDelta) {
-        super.updateRenderState(entity, state, tickDelta);
+    public void extractRenderState(GuardEntity entity, HumanoidRenderState state, float tickDelta) {
+        super.extractRenderState(entity, state, tickDelta);
         this.currentEntity = entity;
     }
 
     @Override
-    protected BipedEntityModel.ArmPose getArmPose(GuardEntity entity, Arm arm) {
-        ItemStack stack = entity.getStackInArm(arm);
-        if (stack.isEmpty()) return BipedEntityModel.ArmPose.EMPTY;
-        if (entity.getItemUseTimeLeft() > 0) {
-            UseAction useAction = stack.getUseAction();
-            switch (useAction) {
-                case BLOCK: return BipedEntityModel.ArmPose.BLOCK;
-                case BOW: return BipedEntityModel.ArmPose.BOW_AND_ARROW;
-                case SPEAR: return BipedEntityModel.ArmPose.SPEAR;
-                case CROSSBOW: return (entity.getMainArm() == arm) == (entity.getActiveHand() == Hand.MAIN_HAND) ? BipedEntityModel.ArmPose.CROSSBOW_CHARGE : BipedEntityModel.ArmPose.EMPTY;
-                default: return BipedEntityModel.ArmPose.EMPTY;
+    protected HumanoidModel.ArmPose getArmPose(GuardEntity entity, HumanoidArm arm) {
+        ItemStack stack = entity.getItemHeldByArm(arm);
+        if (stack.isEmpty()) return HumanoidModel.ArmPose.EMPTY;
+        if (entity.getTicksUsingItem() > 0) {
+            ItemUseAnimation useAnimation = stack.getUseAnimation();
+            if (useAnimation == ItemUseAnimation.BLOCK) return HumanoidModel.ArmPose.BLOCK;
+            if (useAnimation == ItemUseAnimation.BOW) return HumanoidModel.ArmPose.BOW_AND_ARROW;
+            if (useAnimation == ItemUseAnimation.SPEAR) return HumanoidModel.ArmPose.SPEAR;
+            if (useAnimation == ItemUseAnimation.CROSSBOW) {
+                boolean mainMatches = (entity.getMainArm() == arm) == (entity.getUsedItemHand() == InteractionHand.MAIN_HAND);
+                return mainMatches ? HumanoidModel.ArmPose.CROSSBOW_CHARGE : HumanoidModel.ArmPose.EMPTY;
             }
+            return HumanoidModel.ArmPose.EMPTY;
         }
-        boolean mainCrossbow = entity.getMainHandStack().getItem() instanceof CrossbowItem;
-        boolean offCrossbow = entity.getOffHandStack().getItem() instanceof CrossbowItem;
-        if (mainCrossbow && entity.isAttacking()) return BipedEntityModel.ArmPose.CROSSBOW_HOLD;
-        if (offCrossbow && entity.getMainHandStack().getUseAction() == UseAction.NONE && entity.isAttacking()) return BipedEntityModel.ArmPose.CROSSBOW_HOLD;
-        if (stack.isIn(ItemTags.SPEARS)) return BipedEntityModel.ArmPose.SPEAR;
-        return BipedEntityModel.ArmPose.EMPTY;
+        boolean mainCrossbow = entity.getMainHandItem().getItem() instanceof CrossbowItem;
+        boolean offCrossbow = entity.getOffhandItem().getItem() instanceof CrossbowItem;
+        if (mainCrossbow && entity.isAggressive()) return HumanoidModel.ArmPose.CROSSBOW_HOLD;
+        if (offCrossbow && entity.getMainHandItem().getUseAnimation() == ItemUseAnimation.NONE && entity.isAggressive()) return HumanoidModel.ArmPose.CROSSBOW_HOLD;
+        if (stack.get(DataComponents.SWING_ANIMATION) != null && stack.get(DataComponents.SWING_ANIMATION).type() == SwingAnimationType.STAB) {
+            return HumanoidModel.ArmPose.SPEAR;
+        }
+        if (stack.is(ItemTags.SPEARS)) return HumanoidModel.ArmPose.SPEAR;
+        return HumanoidModel.ArmPose.EMPTY;
     }
 
     @Override
-    protected void scale(BipedEntityRenderState state, MatrixStack matrices) {
-        matrices.scale(0.9375F, 0.9375F, 0.9375F);
+    protected void scale(HumanoidRenderState state, PoseStack poseStack) {
+        poseStack.scale(0.9375F, 0.9375F, 0.9375F);
     }
 
     @Nullable
     @Override
-    public Identifier getTexture(BipedEntityRenderState state) {
-        if (this.currentEntity == null) return Identifier.of(GuardVillagers.MODID, "textures/entity/guard/guard_0.png");
-        return Identifier.of(GuardVillagers.MODID, GuardVillagersConfig.useSteveModel
-                ? "textures/entity/guard/guard_steve_" + this.currentEntity.getGuardVariant() + ".png"
-                : "textures/entity/guard/guard_" + this.currentEntity.getGuardVariant() + ".png");
+    public Identifier getTextureLocation(HumanoidRenderState state) {
+        if (this.currentEntity == null) return Identifier.fromNamespaceAndPath(GuardVillagers.MODID, "textures/entity/guard/guard_0.png");
+        return Identifier.fromNamespaceAndPath(GuardVillagers.MODID, GuardVillagersConfig.useSteveModel
+            ? "textures/entity/guard/guard_steve_" + this.currentEntity.getGuardVariant() + ".png"
+            : "textures/entity/guard/guard_" + this.currentEntity.getGuardVariant() + ".png");
     }
 }

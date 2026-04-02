@@ -1,21 +1,21 @@
 package dev.sterner.guardvillagers.common.event;
 
 import net.fabricmc.fabric.api.event.Event;
-import net.minecraft.entity.Entity;
-import net.minecraft.server.world.ServerWorld;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.server.level.ServerLevel;
 
 import static net.fabricmc.fabric.api.event.EventFactory.createArrayBacked;
 
 public class GuardVillagersEvents {
 
-    public static final Event<OnSpawned> ON_SPAWNED_ENTITY_EVENT = createArrayBacked(OnSpawned.class, listeners -> (serverWorld, entity) -> {
+    public static final Event<OnSpawned> ON_SPAWNED_ENTITY_EVENT = createArrayBacked(OnSpawned.class, listeners -> (serverLevel, entity) -> {
         for (OnSpawned listener : listeners) {
-            listener.onSpawned(serverWorld, entity);
+            listener.onSpawned(serverLevel, entity);
         }
     });
 
     @FunctionalInterface
     public interface OnSpawned {
-        void onSpawned(ServerWorld serverWorld, Entity entity);
+        void onSpawned(ServerLevel serverLevel, Entity entity);
     }
 }

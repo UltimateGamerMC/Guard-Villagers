@@ -7,147 +7,150 @@ import dev.sterner.guardvillagers.common.network.GuardFollowPacket;
 import dev.sterner.guardvillagers.common.network.GuardPatrolPacket;
 import dev.sterner.guardvillagers.common.screenhandler.GuardVillagerScreenHandler;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.ingame.HandledScreen;
-import net.minecraft.client.gui.screen.ingame.InventoryScreen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gl.RenderPipelines;
-import net.minecraft.entity.effect.StatusEffects;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.MathHelper;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.narration.NarrationElementOutput;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.util.Mth;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.player.Inventory;
 
-public class GuardVillagerScreen extends HandledScreen<GuardVillagerScreenHandler> {
+public class GuardVillagerScreen extends AbstractContainerScreen<GuardVillagerScreenHandler> {
 
-    private static final Identifier GUARD_GUI_TEXTURES = Identifier.of(GuardVillagers.MODID, "textures/gui/inventory.png");
-    private static final Identifier GUARD_FOLLOWING_ICON = Identifier.of(GuardVillagers.MODID, "textures/gui/following_icons.png");
-    private static final Identifier GUARD_NOT_FOLLOWING_ICON = Identifier.of(GuardVillagers.MODID, "textures/gui/not_following_icons.png");
-    private static final Identifier PATROL_ICON = Identifier.of(GuardVillagers.MODID, "textures/gui/patrollingui.png");
-    private static final Identifier NOT_PATROLLING_ICON = Identifier.of(GuardVillagers.MODID, "textures/gui/notpatrollingui.png");
-
-    private static final Identifier ICONS = Identifier.ofVanilla("textures/gui/icons");
-    private final PlayerEntity player;
+    private static final Identifier GUARD_GUI_TEXTURES = Identifier.fromNamespaceAndPath(GuardVillagers.MODID, "textures/gui/inventory.png");
+    private static final Identifier GUARD_FOLLOWING_ICON = Identifier.fromNamespaceAndPath(GuardVillagers.MODID, "textures/gui/following_icons.png");
+    private static final Identifier GUARD_NOT_FOLLOWING_ICON = Identifier.fromNamespaceAndPath(GuardVillagers.MODID, "textures/gui/not_following_icons.png");
+    private static final Identifier PATROL_ICON = Identifier.fromNamespaceAndPath(GuardVillagers.MODID, "textures/gui/patrollingui.png");
+    private static final Identifier NOT_PATROLLING_ICON = Identifier.fromNamespaceAndPath(GuardVillagers.MODID, "textures/gui/notpatrollingui.png");
+    private static final Identifier ICONS = Identifier.withDefaultNamespace("textures/gui/icons");
     private final GuardEntity guardEntity;
     private float mousePosX;
     private float mousePosY;
-    private boolean buttonPressed;
+    private boolean patrolPressed;
 
-    public GuardVillagerScreen(GuardVillagerScreenHandler handler, PlayerInventory inventory, Text title) {
-        super(handler, inventory, handler.guardEntity.getDisplayName());
-        this.titleX = 80;
-        this.playerInventoryTitleX = 100;
-        this.player = inventory.player;
-        guardEntity = handler.guardEntity;
+    public GuardVillagerScreen(GuardVillagerScreenHandler handler, Inventory inventory, Component title) {
+        super(handler, inventory, handler.guardEntity != null ? handler.guardEntity.getDisplayName() : title);
+        this.titleLabelX = 80;
+        this.inventoryLabelX = 100;
+        this.guardEntity = handler.guardEntity;
     }
 
     @Override
     protected void init() {
         super.init();
-        if (!GuardVillagersConfig.followHero || player.hasStatusEffect(StatusEffects.HERO_OF_THE_VILLAGE)) {
-            this.addDrawableChild(new GuardGuiButton(this.x + 100, this.height / 2 - 40, 20, 18, 0, 0, 19, 256, 256, GUARD_FOLLOWING_ICON, GUARD_NOT_FOLLOWING_ICON, true,
-                    (button) -> {
-                        ClientPlayNetworking.send(new GuardFollowPacket(guardEntity.getId()));
-                    })
-            );
+        if (this.guardEntity == null) {
+            return;
         }
-        if (!GuardVillagersConfig.setGuardPatrolHotv || player.hasStatusEffect(StatusEffects.HERO_OF_THE_VILLAGE)) {
-            this.addDrawableChild(new GuardGuiButton(this.x + 120, this.height / 2 - 40, 20, 18, 0, 0, 19, 256, 256, PATROL_ICON, NOT_PATROLLING_ICON, false,
-                    (button) -> {
-                        buttonPressed = !buttonPressed;
-                        ClientPlayNetworking.send(new GuardPatrolPacket(guardEntity.getId(), buttonPressed));
-                    })
-            );
+        if (!GuardVillagersConfig.followHero || this.minecraft.player.hasEffect(MobEffects.HERO_OF_THE_VILLAGE)) {
+            this.addRenderableWidget(new GuardIconButton(this.leftPos + 100, this.height / 2 - 40, 20, 18, 0, 0, 19, 256, 256, GUARD_FOLLOWING_ICON, GUARD_NOT_FOLLOWING_ICON, true, () ->
+                ClientPlayNetworking.send(new GuardFollowPacket(this.guardEntity.getId()))));
+        }
+        if (!GuardVillagersConfig.setGuardPatrolHotv || this.minecraft.player.hasEffect(MobEffects.HERO_OF_THE_VILLAGE)) {
+            this.addRenderableWidget(new GuardIconButton(this.leftPos + 120, this.height / 2 - 40, 20, 18, 0, 0, 19, 256, 256, PATROL_ICON, NOT_PATROLLING_ICON, false, () -> {
+                this.patrolPressed = !this.patrolPressed;
+                ClientPlayNetworking.send(new GuardPatrolPacket(this.guardEntity.getId(), this.patrolPressed));
+            }));
         }
     }
 
     @Override
-    protected void drawBackground(DrawContext ctx, float delta, int mouseX, int mouseY) {
-        int i = (this.width - this.backgroundWidth) / 2;
-        int j = (this.height - this.backgroundHeight) / 2;
-        ctx.drawTexture(RenderPipelines.GUI_TEXTURED, GUARD_GUI_TEXTURES, i, j, 0, 0, this.backgroundWidth, this.backgroundHeight, 256, 256);
-        int entityCenterX = i + 56;
-        int entityCenterY = j + 80;
-        InventoryScreen.drawEntity(ctx, entityCenterX, entityCenterY, entityCenterX + 49, entityCenterY + 70, 30, 0.0625f, (float) entityCenterX - this.mousePosX, (float) (entityCenterY - 50) - this.mousePosY, this.guardEntity);
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
+        this.mousePosX = mouseX;
+        this.mousePosY = mouseY;
+        super.extractRenderState(graphics, mouseX, mouseY, a);
     }
 
     @Override
-    protected void drawForeground(DrawContext ctx, int x, int y) {
-        super.drawForeground(ctx, x, y);
-        int health = MathHelper.ceil(guardEntity.getHealth());
-        int armor = guardEntity.getArmor();
-        int statusU = guardEntity.hasStatusEffect(StatusEffects.POISON) ? 4 : 0;
-        //Health
+    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
+        super.extractBackground(graphics, mouseX, mouseY, a);
+        int xo = this.leftPos;
+        int yo = this.topPos;
+        graphics.blit(RenderPipelines.GUI_TEXTURED, GUARD_GUI_TEXTURES, xo, yo, 0.0F, 0.0F, this.imageWidth, this.imageHeight, 256, 256);
+        if (this.guardEntity != null) {
+            int entityCenterX = xo + 56;
+            int entityCenterY = yo + 80;
+            InventoryScreen.extractEntityInInventoryFollowsMouse(graphics, entityCenterX, entityCenterY, entityCenterX + 49, entityCenterY + 70, 30, 0.0625F, (float) entityCenterX - this.mousePosX, (float) (entityCenterY - 50) - this.mousePosY, this.guardEntity);
+        }
+    }
+
+    @Override
+    protected void extractLabels(GuiGraphicsExtractor graphics, int xm, int ym) {
+        super.extractLabels(graphics, xm, ym);
+        if (this.guardEntity == null) {
+            return;
+        }
+        int health = Mth.ceil(this.guardEntity.getHealth());
+        int armor = this.guardEntity.getArmorValue();
+        int statusU = this.guardEntity.hasEffect(MobEffects.POISON) ? 4 : 0;
         for (int i = 0; i < 10; i++) {
-            ctx.drawTexture(RenderPipelines.GUI_TEXTURED, ICONS, (i * 8) + 80, 20, 16, 0, 9, 9, 256, 256);
+            graphics.blit(RenderPipelines.GUI_TEXTURED, ICONS, (i * 8) + 80, 20, 16.0F, 0.0F, 9, 9, 256, 256);
         }
         for (int i = 0; i < health / 2; i++) {
             if (health % 2 != 0 && health / 2 == i + 1) {
-                ctx.drawTexture(RenderPipelines.GUI_TEXTURED, ICONS, (i * 8) + 80, 20, 16 + 9 * (4 + statusU), 0, 9, 9, 256, 256);
-                ctx.drawTexture(RenderPipelines.GUI_TEXTURED, ICONS, ((i + 1) * 8) + 80, 20, 16 + 9 * (5 + statusU), 0, 9, 9, 256, 256);
+                graphics.blit(RenderPipelines.GUI_TEXTURED, ICONS, (i * 8) + 80, 20, 16.0F + 9.0F * (4 + statusU), 0.0F, 9, 9, 256, 256);
+                graphics.blit(RenderPipelines.GUI_TEXTURED, ICONS, ((i + 1) * 8) + 80, 20, 16.0F + 9.0F * (5 + statusU), 0.0F, 9, 9, 256, 256);
             } else {
-                ctx.drawTexture(RenderPipelines.GUI_TEXTURED, ICONS, (i * 8) + 80, 20, 16 + 9 * (4 + statusU), 0, 9, 9, 256, 256);
+                graphics.blit(RenderPipelines.GUI_TEXTURED, ICONS, (i * 8) + 80, 20, 16.0F + 9.0F * (4 + statusU), 0.0F, 9, 9, 256, 256);
             }
         }
         for (int i = 0; i < 10; i++) {
-            ctx.drawTexture(RenderPipelines.GUI_TEXTURED, ICONS, (i * 8) + 80, 30, 16, 9, 9, 9, 256, 256);
+            graphics.blit(RenderPipelines.GUI_TEXTURED, ICONS, (i * 8) + 80, 30, 16.0F, 9.0F, 9, 9, 256, 256);
         }
         for (int i = 0; i < armor / 2; i++) {
             if (armor % 2 != 0 && armor / 2 == i + 1) {
-                ctx.drawTexture(RenderPipelines.GUI_TEXTURED, ICONS, (i * 8) + 80, 30, 16 + 9 * 2, 9, 9, 9, 256, 256);
-                ctx.drawTexture(RenderPipelines.GUI_TEXTURED, ICONS, ((i + 1) * 8) + 80, 30, 16 + 9, 9, 9, 9, 256, 256);
+                graphics.blit(RenderPipelines.GUI_TEXTURED, ICONS, (i * 8) + 80, 30, 16.0F + 9.0F * 2, 9.0F, 9, 9, 256, 256);
+                graphics.blit(RenderPipelines.GUI_TEXTURED, ICONS, ((i + 1) * 8) + 80, 30, 16.0F + 9.0F, 9.0F, 9, 9, 256, 256);
             } else {
-                ctx.drawTexture(RenderPipelines.GUI_TEXTURED, ICONS, (i * 8) + 80, 30, 16 + 9 * 2, 9, 9, 9, 256, 256);
+                graphics.blit(RenderPipelines.GUI_TEXTURED, ICONS, (i * 8) + 80, 30, 16.0F + 9.0F * 2, 9.0F, 9, 9, 256, 256);
             }
         }
-
     }
 
-    @Override
-    public void render(DrawContext ctx, int mouseX, int mouseY, float partialTicks) {
-        this.renderBackground(ctx, mouseX, mouseY, partialTicks);
-        this.mousePosX = (float) mouseX;
-        this.mousePosY = (float) mouseY;
-        super.render(ctx, mouseX, mouseY, partialTicks);
-        this.drawMouseoverTooltip(ctx, mouseX, mouseY);
-    }
-
-
-    class GuardGuiButton extends ButtonWidget {
+    private final class GuardIconButton extends AbstractWidget {
         private final int u;
         private final int v;
         private final int hoveredVOffset;
         private final int textureWidth;
         private final int textureHeight;
-        private final Identifier texture;
-        private final Identifier newTexture;
-        private final boolean isFollowButton;
+        private final Identifier textureOn;
+        private final Identifier textureOff;
+        private final boolean followButton;
+        private final Runnable onPress;
 
-        public GuardGuiButton(int xIn, int yIn, int widthIn, int heightIn, int u, int v, int hoveredVOffset, int textureWidth, int textureHeight, Identifier texture, Identifier newTexture, boolean isFollowButton, PressAction pressAction) {
-            super(xIn, yIn, widthIn, heightIn, net.minecraft.text.Text.empty(), pressAction, ButtonWidget.DEFAULT_NARRATION_SUPPLIER);
+        GuardIconButton(int x, int y, int w, int h, int u, int v, int hoveredVOffset, int tw, int th, Identifier on, Identifier off, boolean followButton, Runnable onPress) {
+            super(x, y, w, h, Component.empty());
             this.u = u;
             this.v = v;
             this.hoveredVOffset = hoveredVOffset;
-            this.textureWidth = textureWidth;
-            this.textureHeight = textureHeight;
-            this.texture = texture;
-            this.newTexture = newTexture;
-            this.isFollowButton = isFollowButton;
-        }
-
-        boolean requirementsForTexture() {
-            boolean following = guardEntity.isFollowing();
-            boolean patrol = guardEntity.isPatrolling();
-            return this.isFollowButton ? following : patrol;
+            this.textureWidth = tw;
+            this.textureHeight = th;
+            this.textureOn = on;
+            this.textureOff = off;
+            this.followButton = followButton;
+            this.onPress = onPress;
         }
 
         @Override
-        public void drawIcon(DrawContext context, int mouseX, int mouseY, float delta) {
-            Identifier icon = this.requirementsForTexture() ? texture : newTexture;
+        public void onClick(MouseButtonEvent event, boolean doubleClick) {
+            this.onPress.run();
+        }
+
+        @Override
+        protected void updateWidgetNarration(NarrationElementOutput output) {
+            this.defaultButtonNarrationText(output);
+        }
+
+        @Override
+        protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
+            boolean on = guardEntity != null && (this.followButton ? guardEntity.isFollowing() : guardEntity.isPatrolling());
+            Identifier icon = on ? this.textureOn : this.textureOff;
             int vOffset = this.v + (this.isHovered() ? this.hoveredVOffset : 0);
-            context.drawTexture(RenderPipelines.GUI_TEXTURED, icon, this.getX(), this.getY(), (float) this.u, (float) vOffset, this.getWidth(), this.getHeight(), textureWidth, textureHeight);
+            graphics.blit(RenderPipelines.GUI_TEXTURED, icon, this.getX(), this.getY(), (float) this.u, (float) vOffset, this.getWidth(), this.getHeight(), this.textureWidth, this.textureHeight);
         }
     }
-
 }

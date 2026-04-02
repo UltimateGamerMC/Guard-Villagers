@@ -1,29 +1,29 @@
 package dev.sterner.guardvillagers.common.entity.goal;
 
 import dev.sterner.guardvillagers.common.entity.GuardEntity;
-import net.minecraft.entity.ai.brain.MemoryModuleType;
-import net.minecraft.entity.ai.goal.Goal;
-import net.minecraft.entity.passive.VillagerEntity;
+import net.minecraft.world.entity.ai.memory.MemoryModuleType;
+import net.minecraft.world.entity.ai.goal.Goal;
+import net.minecraft.world.entity.npc.villager.Villager;
 
 import java.util.EnumSet;
 import java.util.List;
 
 public class GuardLookAtAndStopMovingWhenBeingTheInteractionTarget extends Goal {
     private final GuardEntity guard;
-    private VillagerEntity villager;
+    private Villager villager;
 
     public GuardLookAtAndStopMovingWhenBeingTheInteractionTarget(GuardEntity guard) {
         this.guard = guard;
-        this.setControls(EnumSet.of(Goal.Control.MOVE, Goal.Control.LOOK));
+        this.setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));
     }
 
     @Override
-    public boolean canStart() {
-        List<VillagerEntity> list = this.guard.getEntityWorld().getNonSpectatingEntities(VillagerEntity.class, guard.getBoundingBox().expand(10.0D));
+    public boolean canUse() {
+        List<Villager> list = this.guard.level().getEntitiesOfClass(Villager.class, guard.getBoundingBox().inflate(10.0D));
         if (!list.isEmpty()) {
-            for (VillagerEntity villager : list) {
-                if (villager.getBrain().hasMemoryModule(MemoryModuleType.INTERACTION_TARGET) && villager.getBrain().getOptionalRegisteredMemory(MemoryModuleType.INTERACTION_TARGET).get().equals(guard)) {
-                    this.villager = villager;
+            for (Villager v : list) {
+                if (v.getBrain().getMemory(MemoryModuleType.INTERACTION_TARGET).filter(e -> e.equals(guard)).isPresent()) {
+                    this.villager = v;
                     return true;
                 }
             }
@@ -32,12 +32,12 @@ public class GuardLookAtAndStopMovingWhenBeingTheInteractionTarget extends Goal 
     }
 
     @Override
-    public boolean shouldContinue() {
-        return canStart();
+    public boolean canContinueToUse() {
+        return canUse();
     }
 
     @Override
-    public boolean shouldRunEveryTick() {
+    public boolean requiresUpdateEveryTick() {
         return true;
     }
 
@@ -45,7 +45,7 @@ public class GuardLookAtAndStopMovingWhenBeingTheInteractionTarget extends Goal 
     public void tick() {
         super.tick();
         guard.getNavigation().stop();
-        guard.lookAtEntity(villager, 30.0F, 30.0F);
-        guard.getLookControl().lookAt(villager);
+        guard.lookAt(villager, 30.0F, 30.0F);
+        guard.getLookControl().setLookAt(villager);
     }
 }

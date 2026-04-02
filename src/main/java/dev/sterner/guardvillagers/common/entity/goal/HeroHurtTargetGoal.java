@@ -1,16 +1,15 @@
 package dev.sterner.guardvillagers.common.entity.goal;
 
 import dev.sterner.guardvillagers.common.entity.GuardEntity;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.ai.TargetPredicate;
-import net.minecraft.entity.ai.goal.Goal;
-import net.minecraft.entity.ai.goal.TrackTargetGoal;
-import net.minecraft.entity.passive.MerchantEntity;
-import org.jetbrains.annotations.Nullable;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.goal.Goal;
+import net.minecraft.world.entity.ai.goal.target.TargetGoal;
+import net.minecraft.world.entity.ai.targeting.TargetingConditions;
+import net.minecraft.world.entity.npc.villager.AbstractVillager;
 
 import java.util.EnumSet;
 
-public class HeroHurtTargetGoal extends TrackTargetGoal {
+public class HeroHurtTargetGoal extends TargetGoal {
     private final GuardEntity guard;
     private LivingEntity attacker;
     private int timestamp;
@@ -18,24 +17,23 @@ public class HeroHurtTargetGoal extends TrackTargetGoal {
     public HeroHurtTargetGoal(GuardEntity theEntityTameableIn) {
         super(theEntityTameableIn, false);
         this.guard = theEntityTameableIn;
-        this.setControls(EnumSet.of(Goal.Control.TARGET));
+        this.setFlags(EnumSet.of(Goal.Flag.TARGET));
     }
 
     @Override
-    public boolean canStart() {
+    public boolean canUse() {
         LivingEntity livingentity = this.guard.getOwner();
         if (livingentity == null) {
             return false;
         } else {
-            this.attacker = livingentity.getAttacking();
-            int i = livingentity.getLastAttackTime();
-            return i != this.timestamp && this.canTrack(this.attacker, TargetPredicate.DEFAULT);
+            this.attacker = livingentity.getLastHurtMob();
+            int i = livingentity.getLastHurtMobTimestamp();
+            return i != this.timestamp
+                && this.attacker != null
+                && !(this.attacker instanceof AbstractVillager)
+                && !(this.attacker instanceof GuardEntity)
+                && this.canAttack(this.attacker, TargetingConditions.forCombat());
         }
-    }
-
-    @Override
-    protected boolean canTrack(@Nullable LivingEntity potentialTarget, TargetPredicate targetPredicate) {
-        return super.canTrack(potentialTarget, targetPredicate) && !(potentialTarget instanceof MerchantEntity) && !(potentialTarget instanceof GuardEntity);
     }
 
     @Override
@@ -43,7 +41,7 @@ public class HeroHurtTargetGoal extends TrackTargetGoal {
         this.mob.setTarget(this.attacker);
         LivingEntity livingentity = this.guard.getOwner();
         if (livingentity != null) {
-            this.timestamp = livingentity.getLastAttackTime();
+            this.timestamp = livingentity.getLastHurtMobTimestamp();
         }
         super.start();
     }

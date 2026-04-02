@@ -5,7 +5,7 @@
   "mixins": [
     "MobEntityMixin",
     "ServerWorldMixin",
-    "VillagerTaskListProviderMixin"
+    "VillagerGoalPackagesMixin"
   ],
   "injectors": {
     "defaultRequire": 1

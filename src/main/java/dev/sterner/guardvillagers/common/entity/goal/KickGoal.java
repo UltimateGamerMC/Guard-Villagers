@@ -1,8 +1,10 @@
 package dev.sterner.guardvillagers.common.entity.goal;
 
 import dev.sterner.guardvillagers.common.entity.GuardEntity;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.ai.goal.Goal;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.ItemTags;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.goal.Goal;
 
 public class KickGoal extends Goal {
 
@@ -13,8 +15,12 @@ public class KickGoal extends Goal {
     }
 
     @Override
-    public boolean canStart() {
-        return guard.getTarget() != null && guard.getTarget().distanceTo(guard) <= 2.5D && guard.getMainHandStack().getItem().isUsedOnRelease(guard.getMainHandStack()) && !guard.isBlocking() && guard.kickCoolDown == 0;
+    public boolean canUse() {
+        return guard.getTarget() != null
+            && guard.distanceTo(guard.getTarget()) <= 2.5D
+            && guard.getMainHandItem().is(ItemTags.SWORDS)
+            && !guard.isBlocking()
+            && guard.kickCoolDown == 0;
     }
 
     @Override
@@ -24,8 +30,8 @@ public class KickGoal extends Goal {
             guard.kickTicks = 10;
         }
         LivingEntity target = guard.getTarget();
-        if (target != null && guard.getEntityWorld() instanceof net.minecraft.server.world.ServerWorld sw) {
-            guard.tryAttack(sw, target);
+        if (target != null && guard.level() instanceof ServerLevel sw) {
+            guard.doHurtTarget(sw, target);
         }
     }
 

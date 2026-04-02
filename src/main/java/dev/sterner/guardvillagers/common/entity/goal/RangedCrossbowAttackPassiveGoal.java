@@ -3,23 +3,31 @@ package dev.sterner.guardvillagers.common.entity.goal;
 import dev.sterner.guardvillagers.GuardVillagers;
 import dev.sterner.guardvillagers.GuardVillagersConfig;
 import dev.sterner.guardvillagers.common.entity.GuardEntity;
-import net.minecraft.entity.*;
-import net.minecraft.entity.ai.NoPenaltyTargeting;
-import net.minecraft.entity.ai.RangedAttackMob;
-import net.minecraft.entity.ai.goal.Goal;
-import net.minecraft.entity.mob.PathAwareEntity;
-import net.minecraft.item.CrossbowItem;
-import net.minecraft.item.ItemStack;
-import net.minecraft.util.TimeHelper;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.util.math.intprovider.UniformIntProvider;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.util.TimeUtil;
+import net.minecraft.util.valueproviders.UniformInt;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Pose;
+import net.minecraft.world.entity.ai.goal.Goal;
+import net.minecraft.world.entity.ai.util.DefaultRandomPos;
+import net.minecraft.world.entity.monster.CrossbowAttackMob;
+import net.minecraft.world.entity.monster.RangedAttackMob;
+import net.minecraft.world.entity.projectile.ProjectileUtil;
+import net.minecraft.world.item.CrossbowItem;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.ChargedProjectiles;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.EnumSet;
 import java.util.List;
 
-public class RangedCrossbowAttackPassiveGoal<T extends PathAwareEntity & RangedAttackMob & CrossbowUser> extends Goal {
-    public static final UniformIntProvider PATHFINDING_DELAY_RANGE = TimeHelper.betweenSeconds(1, 2);
+public class RangedCrossbowAttackPassiveGoal<T extends GuardEntity & RangedAttackMob & CrossbowAttackMob> extends Goal {
+    public static final UniformInt PATHFINDING_DELAY_RANGE = TimeUtil.rangeOfSeconds(1, 2);
     private final T mob;
     private final double speedModifier;
     private final float attackRadiusSqr;
@@ -30,27 +38,26 @@ public class RangedCrossbowAttackPassiveGoal<T extends PathAwareEntity & RangedA
     private int seeTime;
     private int attackDelay;
     private int updatePathDelay;
-    private int runTime;
 
     public RangedCrossbowAttackPassiveGoal(T pMob, double pSpeedModifier, float pAttackRadius) {
         this.mob = pMob;
         this.speedModifier = pSpeedModifier;
         this.attackRadiusSqr = pAttackRadius * pAttackRadius;
-        this.setControls(EnumSet.of(Goal.Control.MOVE, Goal.Control.LOOK));
+        this.setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));
     }
 
     @Override
-    public boolean canStart() {
+    public boolean canUse() {
         return this.isValidTarget() && this.isHoldingCrossbow();
     }
 
     private boolean isHoldingCrossbow() {
-        return this.mob.isHolding(is -> is.getItem() instanceof CrossbowItem);
+        return this.mob.isHolding(is -> is.is(Items.CROSSBOW));
     }
 
     @Override
-    public boolean shouldContinue() {
-        return this.isValidTarget() && (this.canStart() || !this.mob.getNavigation().isIdle()) && this.isHoldingCrossbow();
+    public boolean canContinueToUse() {
+        return this.isValidTarget() && (this.canUse() || !this.mob.getNavigation().isDone()) && this.isHoldingCrossbow();
     }
 
     private boolean isValidTarget() {
@@ -60,31 +67,32 @@ public class RangedCrossbowAttackPassiveGoal<T extends PathAwareEntity & RangedA
     @Override
     public void stop() {
         super.stop();
-        this.mob.setAttacking(false);
+        this.mob.setAggressive(false);
         this.mob.setTarget(null);
         this.seeTime = 0;
         if (this.mob.isUsingItem()) {
             this.mob.stopUsingItem();
-            this.mob.setCharging(false);
+            this.mob.setChargingCrossbow(false);
+            this.mob.getUseItem().set(DataComponents.CHARGED_PROJECTILES, ChargedProjectiles.EMPTY);
         }
-        this.mob.setPose(EntityPose.STANDING);
+        this.mob.setPose(Pose.STANDING);
     }
 
     @Override
-    public boolean shouldRunEveryTick() {
+    public boolean requiresUpdateEveryTick() {
         return true;
     }
 
     @Override
     public void start() {
-        this.mob.setAttacking(true);
+        this.mob.setAggressive(true);
     }
 
     @Override
     public void tick() {
         LivingEntity livingentity = this.mob.getTarget();
         if (livingentity != null) {
-            boolean canSee = this.mob.getVisibilityCache().canSee(livingentity);
+            boolean canSee = this.mob.getSensing().hasLineOfSight(livingentity);
             boolean hasSeenEntityRecently = this.seeTime > 0;
             if (canSee != hasSeenEntityRecently) {
                 this.seeTime = 0;
@@ -94,56 +102,56 @@ public class RangedCrossbowAttackPassiveGoal<T extends PathAwareEntity & RangedA
             } else {
                 --this.seeTime;
             }
-            double d0 = this.mob.squaredDistanceTo(livingentity);
+            double d0 = this.mob.distanceToSqr(livingentity);
             double d1 = livingentity.distanceTo(this.mob);
             if (d1 <= 4.0D) {
-                this.mob.getMoveControl().strafeTo(this.mob.isUsingItem() ? -0.5F : -3.0F, 0.0F);
-                this.mob.lookAtEntity(livingentity, 30.0F, 30.0F);
+                this.mob.getMoveControl().strafe(this.mob.isUsingItem() ? -0.5F : -3.0F, 0.0F);
+                this.mob.lookAt(livingentity, 30.0F, 30.0F);
             }
             if (this.mob.getRandom().nextInt(50) == 0) {
-                if (this.mob.isInPose(EntityPose.STANDING))
-                    this.mob.setPose(EntityPose.CROUCHING);
+                if (this.mob.getPose() == Pose.STANDING)
+                    this.mob.setPose(Pose.CROUCHING);
                 else
-                    this.mob.setPose(EntityPose.STANDING);
+                    this.mob.setPose(Pose.STANDING);
             }
             boolean canSee2 = (d0 > (double) this.attackRadiusSqr || this.seeTime < 5) && this.attackDelay == 0;
             if (canSee2) {
                 --this.updatePathDelay;
                 if (this.updatePathDelay <= 0) {
-                    this.mob.getNavigation().startMovingTo(livingentity, this.canRun() ? this.speedModifier : this.speedModifier * 0.5D);
-                    this.updatePathDelay = PATHFINDING_DELAY_RANGE.get(this.mob.getRandom());
+                    this.mob.getNavigation().moveTo(livingentity, this.canRun() ? this.speedModifier : this.speedModifier * 0.5D);
+                    this.updatePathDelay = PATHFINDING_DELAY_RANGE.sample(this.mob.getRandom());
                 }
             } else {
                 this.updatePathDelay = 0;
                 this.mob.getNavigation().stop();
             }
-            this.mob.lookAtEntity(livingentity, 30.0F, 30.0F);
-            this.mob.getLookControl().lookAt(livingentity, 30.0F, 30.0F);
+            this.mob.lookAt(livingentity, 30.0F, 30.0F);
+            this.mob.getLookControl().setLookAt(livingentity, 30.0F, 30.0F);
             if (this.friendlyInLineOfSight() && GuardVillagersConfig.friendlyFire)
                 this.crossbowState = CrossbowState.FIND_NEW_POSITION;
             if (this.crossbowState == CrossbowState.FIND_NEW_POSITION && GuardVillagersConfig.friendlyFire) {
                 this.mob.stopUsingItem();
-                this.mob.setCharging(false);
+                this.mob.setChargingCrossbow(false);
                 if (this.findPosition())
-                    this.mob.getNavigation().startMovingTo(this.wantedX, this.wantedY, this.wantedZ, this.mob.isSneaking() ? 0.5F : 1.2D);
+                    this.mob.getNavigation().moveTo(this.wantedX, this.wantedY, this.wantedZ, this.mob.isShiftKeyDown() ? 0.5D : 1.2D);
                 this.crossbowState = CrossbowState.UNCHARGED;
             } else if (this.crossbowState == CrossbowState.UNCHARGED) {
                 if (hasSeenEntityRecently) {
-                    this.mob.setCurrentHand(GuardVillagers.getHandWith(this.mob, item -> item instanceof CrossbowItem));
+                    this.mob.startUsingItem(ProjectileUtil.getWeaponHoldingHand(this.mob, Items.CROSSBOW));
                     this.crossbowState = CrossbowState.CHARGING;
-                    this.mob.setCharging(true);
+                    this.mob.setChargingCrossbow(true);
                 }
             } else if (this.crossbowState == CrossbowState.CHARGING) {
                 if (!this.mob.isUsingItem()) {
                     this.crossbowState = CrossbowState.UNCHARGED;
                 }
-                int i = this.mob.getItemUseTime();
-                ItemStack itemstack = this.mob.getActiveItem();
-                if (i >= CrossbowItem.getPullTime(itemstack, this.mob) || CrossbowItem.isCharged(itemstack)) {
-                    this.mob.stopUsingItem();
+                int i = this.mob.getTicksUsingItem();
+                ItemStack itemstack = this.mob.getUseItem();
+                if (i >= CrossbowItem.getChargeDuration(itemstack, this.mob) || CrossbowItem.isCharged(itemstack)) {
+                    this.mob.releaseUsingItem();
                     this.crossbowState = CrossbowState.CHARGED;
                     this.attackDelay = 10 + this.mob.getRandom().nextInt(5);
-                    this.mob.setCharging(false);
+                    this.mob.setChargingCrossbow(false);
                 }
             } else if (this.crossbowState == CrossbowState.CHARGED) {
                 --this.attackDelay;
@@ -151,9 +159,9 @@ public class RangedCrossbowAttackPassiveGoal<T extends PathAwareEntity & RangedA
                     this.crossbowState = CrossbowState.READY_TO_ATTACK;
                 }
             } else if (this.crossbowState == CrossbowState.READY_TO_ATTACK && canSee) {
-                this.mob.shootAt(livingentity, 1.0F);
-                ItemStack itemstack1 = this.mob.getStackInHand(GuardVillagers.getHandWith(this.mob, item -> item instanceof CrossbowItem));
-                itemstack1.set(net.minecraft.component.DataComponentTypes.CHARGED_PROJECTILES, net.minecraft.component.type.ChargedProjectilesComponent.DEFAULT);
+                this.mob.performRangedAttack(livingentity, 1.0F);
+                ItemStack itemstack1 = this.mob.getItemInHand(GuardVillagers.getHandWith(this.mob, item -> item == Items.CROSSBOW));
+                itemstack1.set(DataComponents.CHARGED_PROJECTILES, ChargedProjectiles.EMPTY);
                 this.crossbowState = CrossbowState.UNCHARGED;
             }
         }
@@ -161,15 +169,18 @@ public class RangedCrossbowAttackPassiveGoal<T extends PathAwareEntity & RangedA
     }
 
     private boolean friendlyInLineOfSight() {
-        List<Entity> list = this.mob.getEntityWorld().getOtherEntities(this.mob, this.mob.getBoundingBox().expand(5.0D));
+        AABB box = this.mob.getBoundingBox().inflate(5.0D);
+        List<Entity> list = this.mob.level().getEntities(this.mob, box, e -> true);
         for (Entity guard : list) {
             if (guard != this.mob.getTarget()) {
-                boolean isVillager = ((GuardEntity) this.mob).getOwner() == guard || guard.getType() == EntityType.VILLAGER || guard.getType() == GuardVillagers.GUARD_VILLAGER || guard.getType() == EntityType.IRON_GOLEM;
+                boolean isVillager = ((GuardEntity) this.mob).getOwner() == guard
+                    || guard.getType() == EntityType.VILLAGER
+                    || guard.getType() == GuardVillagers.GUARD_VILLAGER
+                    || guard.getType() == EntityType.IRON_GOLEM;
                 if (isVillager) {
-                    Vec3d vector3d = this.mob.getRotationVector();
-                    Vec3d vector3d1 = guard.getEntityPos().relativize(this.mob.getEntityPos()).normalize();
-                    vector3d1 = new Vec3d(vector3d1.x, vector3d1.y, vector3d1.z);
-                    if (vector3d1.dotProduct(vector3d) < 1.0D && this.mob.canSee(guard) && guard.distanceTo(this.mob) <= 4.0D)
+                    Vec3 vector3d = this.mob.getLookAngle();
+                    Vec3 vector3d1 = this.mob.position().subtract(guard.position()).normalize();
+                    if (vector3d1.dot(vector3d) < 1.0D && this.mob.getSensing().hasLineOfSight(guard) && guard.distanceTo(this.mob) <= 4.0D)
                         return true;
                 }
             }
@@ -178,7 +189,7 @@ public class RangedCrossbowAttackPassiveGoal<T extends PathAwareEntity & RangedA
     }
 
     public boolean findPosition() {
-        Vec3d vector3d = this.getPosition();
+        Vec3 vector3d = this.getPosition();
         if (vector3d == null) {
             return false;
         } else {
@@ -190,11 +201,11 @@ public class RangedCrossbowAttackPassiveGoal<T extends PathAwareEntity & RangedA
     }
 
     @Nullable
-    protected Vec3d getPosition() {
+    protected Vec3 getPosition() {
         if (this.isValidTarget())
-            return NoPenaltyTargeting.findFrom(this.mob, 16, 7, this.mob.getTarget().getEntityPos());
+            return DefaultRandomPos.getPosTowards(this.mob, 16, 7, this.mob.getTarget().position(), (float) (Math.PI / 2));
         else
-            return NoPenaltyTargeting.find(this.mob, 16, 7);
+            return DefaultRandomPos.getPos(this.mob, 16, 7);
     }
 
     private boolean canRun() {

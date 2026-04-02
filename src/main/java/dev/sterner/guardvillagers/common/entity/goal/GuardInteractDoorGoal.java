@@ -1,15 +1,15 @@
 package dev.sterner.guardvillagers.common.entity.goal;
 
 import dev.sterner.guardvillagers.common.entity.GuardEntity;
-import net.minecraft.entity.ai.goal.LongDoorInteractGoal;
-import net.minecraft.entity.ai.pathing.Path;
-import net.minecraft.entity.ai.pathing.PathNode;
-import net.minecraft.entity.mob.PathAwareEntity;
-import net.minecraft.util.Hand;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.PathfinderMob;
+import net.minecraft.world.entity.ai.goal.OpenDoorGoal;
+import net.minecraft.world.level.pathfinder.Node;
+import net.minecraft.world.level.pathfinder.Path;
 
 import java.util.List;
 
-public class GuardInteractDoorGoal extends LongDoorInteractGoal {
+public class GuardInteractDoorGoal extends OpenDoorGoal {
     private final GuardEntity guard;
 
     public GuardInteractDoorGoal(GuardEntity pMob, boolean pCloseDoor) {
@@ -18,45 +18,46 @@ public class GuardInteractDoorGoal extends LongDoorInteractGoal {
     }
 
     @Override
-    public boolean canStart() {
-        return super.canStart();
+    public boolean canUse() {
+        return super.canUse();
     }
 
     @Override
     public void start() {
         if (areOtherMobsComingThroughDoor(guard)) {
             super.start();
-            guard.swingHand(Hand.MAIN_HAND);
+            guard.swing(InteractionHand.MAIN_HAND);
         }
     }
 
     private boolean areOtherMobsComingThroughDoor(GuardEntity pEntity) {
-        List<? extends PathAwareEntity> nearbyEntityList = pEntity.getEntityWorld().getNonSpectatingEntities(PathAwareEntity.class, pEntity.getBoundingBox().expand(4.0D));
+        List<? extends PathfinderMob> nearbyEntityList = pEntity.level().getEntitiesOfClass(PathfinderMob.class, pEntity.getBoundingBox().inflate(4.0D));
         if (!nearbyEntityList.isEmpty()) {
-            for (PathAwareEntity mob : nearbyEntityList) {
-                if (mob.getBlockPos().isWithinDistance(pEntity.getEntityPos(), 2.0D))
+            for (PathfinderMob mob : nearbyEntityList) {
+                if (mob.blockPosition().closerThan(pEntity.blockPosition(), 2.0D))
                     return isMobComingThroughDoor(mob);
             }
         }
         return false;
     }
 
-    private boolean isMobComingThroughDoor(PathAwareEntity pEntity) {
+    private boolean isMobComingThroughDoor(PathfinderMob pEntity) {
         if (pEntity.getNavigation() == null) {
             return false;
-        } else {
-            Path path = pEntity.getNavigation().getCurrentPath();
-            if (path == null || path.isFinished()) {
-                return false;
             } else {
-                PathNode node = path.getLastNode();
-                if (node == null) {
+                Path path = pEntity.getNavigation().getPath();
+                if (path == null || path.isDone()) {
                     return false;
                 } else {
-                    PathNode node1 = path.getCurrentNode();
-                    return pEntity.getBlockPos().equals(node.getBlockPos()) || pEntity.getBlockPos().equals(node1.getBlockPos());
+                    Node end = path.getEndNode();
+                    Node next = path.getNextNode();
+                    if (end == null) {
+                        return false;
+                    } else {
+                        return pEntity.blockPosition().equals(end.asBlockPos())
+                            || (next != null && pEntity.blockPosition().equals(next.asBlockPos()));
+                    }
                 }
             }
-        }
     }
 }

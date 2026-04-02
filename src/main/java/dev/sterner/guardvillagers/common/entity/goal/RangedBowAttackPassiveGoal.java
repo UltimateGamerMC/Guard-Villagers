@@ -1,12 +1,12 @@
 package dev.sterner.guardvillagers.common.entity.goal;
 
 import dev.sterner.guardvillagers.common.entity.GuardEntity;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.ai.RangedAttackMob;
-import net.minecraft.entity.ai.goal.Goal;
-import net.minecraft.entity.projectile.ProjectileUtil;
-import net.minecraft.item.BowItem;
-import net.minecraft.item.Items;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.goal.Goal;
+import net.minecraft.world.entity.monster.RangedAttackMob;
+import net.minecraft.world.entity.projectile.ProjectileUtil;
+import net.minecraft.world.item.BowItem;
+import net.minecraft.world.item.Items;
 
 import java.util.EnumSet;
 
@@ -26,7 +26,7 @@ public class RangedBowAttackPassiveGoal<T extends GuardEntity & RangedAttackMob>
         this.moveSpeedAmp = moveSpeedAmpIn;
         this.attackCooldown = attackCooldownIn;
         this.maxAttackDistance = maxAttackDistanceIn * maxAttackDistanceIn;
-        this.setControls(EnumSet.of(Goal.Control.MOVE, Goal.Control.LOOK));
+        this.setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));
     }
 
     public void setAttackCooldown(int attackCooldownIn) {
@@ -34,29 +34,29 @@ public class RangedBowAttackPassiveGoal<T extends GuardEntity & RangedAttackMob>
     }
 
     @Override
-    public boolean canStart() {
+    public boolean canUse() {
         return entity.getTarget() != null && this.isBowInMainhand() && !entity.isEating() && !entity.isBlocking();
     }
 
     protected boolean isBowInMainhand() {
-        return entity.getMainHandStack().getItem() instanceof BowItem;
+        return entity.getMainHandItem().is(Items.BOW);
     }
 
     @Override
-    public boolean shouldContinue() {
-        return (this.canStart() || !entity.getNavigation().isIdle()) && this.isBowInMainhand();
+    public boolean canContinueToUse() {
+        return (this.canUse() || !entity.getNavigation().isDone()) && this.isBowInMainhand();
     }
 
     @Override
     public void start() {
         super.start();
-        this.entity.setAttacking(true);
+        this.entity.setAggressive(true);
     }
 
     @Override
     public void stop() {
         super.stop();
-        this.entity.setAttacking(false);
+        this.entity.setAggressive(false);
         this.seeTime = 0;
         this.attackTime = -1;
         this.entity.stopUsingItem();
@@ -66,8 +66,8 @@ public class RangedBowAttackPassiveGoal<T extends GuardEntity & RangedAttackMob>
     public void tick() {
         LivingEntity livingentity = this.entity.getTarget();
         if (livingentity != null) {
-            double d0 = this.entity.squaredDistanceTo(livingentity.getX(), livingentity.getY(), livingentity.getZ());
-            boolean flag = this.entity.getVisibilityCache().canSee(livingentity);
+            double d0 = this.entity.distanceToSqr(livingentity.getX(), livingentity.getY(), livingentity.getZ());
+            boolean flag = this.entity.getSensing().hasLineOfSight(livingentity);
             boolean flag1 = this.seeTime > 0;
             if (flag != flag1) {
                 this.seeTime = 0;
@@ -83,7 +83,7 @@ public class RangedBowAttackPassiveGoal<T extends GuardEntity & RangedAttackMob>
                 this.entity.getNavigation().stop();
                 ++this.strafingTime;
             } else {
-                this.entity.getNavigation().startMovingTo(livingentity, this.moveSpeedAmp);
+                this.entity.getNavigation().moveTo(livingentity, this.moveSpeedAmp);
                 this.strafingTime = -1;
             }
 
@@ -106,24 +106,24 @@ public class RangedBowAttackPassiveGoal<T extends GuardEntity & RangedAttackMob>
                     this.strafingBackwards = true;
                 }
                 if (entity.getPatrolPos() == null)
-                    this.entity.getMoveControl().strafeTo(this.strafingBackwards ? -0.5F : 0.5F, this.strafingClockwise ? 0.5F : -0.5F);
-                this.entity.lookAtEntity(livingentity, 30.0F, 30.0F);
+                    this.entity.getMoveControl().strafe(this.strafingBackwards ? -0.5F : 0.5F, this.strafingClockwise ? 0.5F : -0.5F);
+                this.entity.lookAt(livingentity, 30.0F, 30.0F);
             }
-            this.entity.lookAtEntity(livingentity, 30.0F, 30.0F);
-            this.entity.getLookControl().lookAt(livingentity, 30.0F, 30.0F);
+            this.entity.lookAt(livingentity, 30.0F, 30.0F);
+            this.entity.getLookControl().setLookAt(livingentity, 30.0F, 30.0F);
             if (this.entity.isUsingItem() && !this.entity.isBlocking()) {
                 if (!flag && this.seeTime < -60) {
                     this.entity.stopUsingItem();
                 } else if (flag) {
-                    int i = this.entity.getItemUseTime();
+                    int i = this.entity.getTicksUsingItem();
                     if (i >= 20) {
                         this.entity.stopUsingItem();
-                        this.entity.shootAt(livingentity, BowItem.getPullProgress(i));
+                        this.entity.performRangedAttack(livingentity, BowItem.getPowerForTime(i));
                         this.attackTime = this.attackCooldown;
                     }
                 }
             } else if (--this.attackTime <= 0 && this.seeTime >= -60 && !this.entity.isBlocking()) {
-                this.entity.setCurrentHand(ProjectileUtil.getHandPossiblyHolding(this.entity, Items.BOW));
+                this.entity.startUsingItem(ProjectileUtil.getWeaponHoldingHand(this.entity, Items.BOW));
             }
 
         }

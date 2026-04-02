@@ -2,28 +2,28 @@ package dev.sterner.guardvillagers.common.entity.goal;
 
 import dev.sterner.guardvillagers.GuardVillagersConfig;
 import dev.sterner.guardvillagers.common.entity.GuardEntity;
-import net.minecraft.entity.ai.goal.Goal;
-import net.minecraft.entity.effect.StatusEffects;
-import net.minecraft.entity.passive.VillagerEntity;
-import net.minecraft.village.VillagerProfession;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.ai.goal.Goal;
+import net.minecraft.world.entity.npc.villager.Villager;
+import net.minecraft.world.entity.npc.villager.VillagerProfession;
 
 import java.util.List;
 
 public class RunToClericGoal extends Goal {
     public final GuardEntity guard;
-    public VillagerEntity cleric;
+    public Villager cleric;
 
     public RunToClericGoal(GuardEntity guard) {
         this.guard = guard;
     }
 
     @Override
-    public boolean canStart() {
-        List<VillagerEntity> list = this.guard.getEntityWorld().getNonSpectatingEntities(VillagerEntity.class, this.guard.getBoundingBox().expand(10.0D, 3.0D, 10.0D));
+    public boolean canUse() {
+        List<Villager> list = this.guard.level().getEntitiesOfClass(Villager.class, this.guard.getBoundingBox().inflate(10.0D, 3.0D, 10.0D));
         if (!list.isEmpty()) {
-            for (VillagerEntity mob : list) {
+            for (Villager mob : list) {
                 if (mob != null) {
-                    if (mob.getVillagerData().profession().matchesKey(VillagerProfession.CLERIC) && guard.getHealth() < guard.getMaxHealth() && guard.getTarget() == null && !guard.hasStatusEffect(StatusEffects.REGENERATION)) {
+                    if (mob.getVillagerData().profession().is(VillagerProfession.CLERIC) && guard.getHealth() < guard.getMaxHealth() && guard.getTarget() == null && !guard.hasEffect(MobEffects.REGENERATION)) {
                         this.cleric = mob;
                         return GuardVillagersConfig.clericHealing;
                     }
@@ -35,12 +35,12 @@ public class RunToClericGoal extends Goal {
 
     @Override
     public void tick() {
-        guard.lookAtEntity(cleric, 30.0F, 30.0F);
-        guard.getLookControl().lookAt(cleric, 30.0F, 30.0F);
+        guard.lookAt(cleric, 30.0F, 30.0F);
+        guard.getLookControl().setLookAt(cleric, 30.0F, 30.0F);
         if (guard.distanceTo(cleric) >= 6.0D) {
-            guard.getNavigation().startMovingTo(cleric, 0.5D);
+            guard.getNavigation().moveTo(cleric, 0.5D);
         } else {
-            guard.getMoveControl().strafeTo(-1.0F, 0.0F);
+            guard.getMoveControl().strafe(-1.0F, 0.0F);
             guard.getNavigation().stop();
         }
     }
